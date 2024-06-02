@@ -1,4 +1,6 @@
+require('dotenv').config()
 const express = require('express')
+const Note = require('./models/note')
 const app = express()
 const cors = require('cors')
 
@@ -16,41 +18,20 @@ const requestLogger = (req, res, next) => {
 
 app.use(requestLogger)
 
-let notes = [
-    {
-      id: 1,
-      content: "HTML is easy",
-      important: true
-    },
-    {
-      id: 2,
-      content: "Browser can execute only JavaScript",
-      important: false
-    },
-    {
-      id: 3,
-      content: "GET and POST are the most important methods of HTTP protocol",
-      important: true
-    }
-]
-
 app.get('/', (req, res) => {
     res.send('<h1>Hello World</h1>')
 })
 
 app.get('/api/notes', (req, res) => {
-    res.json(notes)
+    Note.find({}).then(notes => {
+        res.json(notes)
+    })
 })
 
 app.get('/api/notes/:id', (req, res) => {
-    const id = Number(req.params.id)
-    const note = notes.find(n => n.id === id)
-
-    if (note) {
+    Note.findById(req.params.id).then(note => {
         res.json(note)
-    } else {
-        res.status(404).end()
-    }
+    })
 })
 
 const generateId = () => {
@@ -70,13 +51,14 @@ app.post('/api/notes', (req, res) => {
         })
     }
     
-    const note = {
+    const note = new Note({
         content: body.content,
         important: Boolean(body.important) || false,
-        id: generateId(),
-    }
-    notes = notes.concat(note)
-    res.json(note)
+    })
+
+    note.save().then(savedNote => {
+        return res.json(savedNote)
+    })
 })
 
 app.delete('/api/notes/:id', (req, res) => {
