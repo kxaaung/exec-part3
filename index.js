@@ -16,6 +16,17 @@ const requestLogger = (req, res, next) => {
     next()
 }
 
+const errorHandler = (error, req, res, next) => {
+    console.error(error.message)
+    if (error.name === 'CastError') {
+        return res.status(400).send({error: 'malformatted id'})
+    } else if (error.name === 'ValidationError') {
+        return res.status(400).json({ error: error.message })
+    }
+    
+    next(error)
+}
+
 app.use(requestLogger)
 
 app.get('/', (req, res) => {
@@ -28,13 +39,19 @@ app.get('/api/notes', (req, res) => {
     })
 })
 
-app.get('/api/notes/:id', (req, res) => {
-    Note.findById(req.params.id).then(note => {
-        res.json(note)
-    })
+app.get('/api/notes/:id', (req, res, next) => {
+    Note.findById(req.params.id)
+        .then(note => {
+            if (note) {
+                res.json(note)
+            } else {
+                res.status(404).end()
+            }
+        })
+        .catch(error => next(error));
 })
 
-app.post('/api/notes', (req, res) => {
+app.post('/api/notes', (req, res, next) => {
     const body = req.body
 
     if (!body.content) {
@@ -48,16 +65,32 @@ app.post('/api/notes', (req, res) => {
         important: Boolean(body.important) || false,
     })
 
-    note.save().then(savedNote => {
-        return res.json(savedNote)
-    })
+    note.save()
+        .then(savedNote => {
+            return res.json(savedNote)
+        })
+        .catch(err => next(err))
 })
 
-app.delete('/api/notes/:id', (req, res) => {
-    const id = Number(req.params.id)
-    notes = notes.filter(n => n.id !== id)
+app.put('/api/notes/:id', (req, res, next) => {
+    const {content, important} = req.body
 
-    res.status(204).end()
+    Note.findByIdAndUpdate(
+            req.params.id,
+            { content, important },
+            { new: true, runValidators: true, context: 'query'})
+        .then(updatedNote => {
+            res.json(updatedNote)
+        })
+        .catch(err => next(err))
+})
+
+app.delete('/api/notes/:id', (req, res, next) => {
+    Note.findByIdAndDelete(req.params.id)
+        .then(result => {
+            return res.status(204).end()
+        })
+        .catch(err => next(err))
 })
 
 const unknowEndPoint = (req, res) => {
@@ -65,6 +98,7 @@ const unknowEndPoint = (req, res) => {
 }
 
 app.use(unknowEndPoint)
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
